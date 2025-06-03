@@ -4,11 +4,9 @@ import pandas as pd
 import numpy as np
 from sklearn.preprocessing import LabelEncoder
 from sklearn.model_selection import train_test_split
-
+import matplotlib.pyplot as plt
 import librosa   # 오디오 전처리를 위한 라이브러리 
-from IPython.display import Audio
 
-import tensorflow.keras as keras
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Conv2D, MaxPooling2D, Flatten, Dense, Dropout, BatchNormalization
 from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint
@@ -117,10 +115,15 @@ def Build_DFCC_CNN(input_shape=train_mfccs[0].shape):
     model.add(BatchNormalization())
     model.add(MaxPooling2D(pool_size=(2,2)))
 
+    # Con4
+    model.add(Conv2D(128, kernel_size=(3,3), activation='relu', padding='same'))
+    model.add(BatchNormalization())
+    model.add(MaxPooling2D(pool_size=(2,2)))
+
     # Flatten + DNN
     model.add(Flatten())
     model.add(Dense(128, activation='relu'))
-    model.add(Dropout(0.5))
+    model.add(Dropout(0.2))
     model.add(Dense(1, activation='sigmoid'))
 
     return model
@@ -132,11 +135,11 @@ model.compile(loss="binary_crossentropy",   # 이진 분류이므로 binary_cros
               metrics=["accuracy"])
 
 callbacks_list = [
-    keras.callbacks.EarlyStopping(
+    EarlyStopping(
         monitor="val_accuracy",   # model의 val_accuracy를 모니터링 하다가
         patience=2,   # 2번의 epoch 동안 val_accuracy가 증가하지 않으면 훈련을 중지 (epoch 다 돌리지 않음)
     ),
-    keras.callbacks.ModelCheckpoint(
+    ModelCheckpoint(
         filepath="DFCC_pksong0517.keras",   # model 파일의 저장 경로
         monitor="val_loss",
         save_best_only=True,   # val_loss가 좋아지지 않으면 모델 저장 파일을 덮어쓰지 않겠다는 뜻입니다. 즉 훈련하는 동안 가장 좋은 모델이 저장됩니다.
@@ -148,8 +151,6 @@ history = model.fit(X_train, y_train,
                     batch_size=32,   # 일단 국룰이 32로 잡아봄. 추후 성능에 따라 바꿔가며 실험에 볼 필요 있음
                     callbacks=callbacks_list,
                     validation_data=(X_val, y_val))
-
-import matplotlib.pyplot as plt
 
 accuracy = history.history["accuracy"]
 val_accuracy = history.history["val_accuracy"]
@@ -172,4 +173,4 @@ test_mfccs = np.array(test_mfccs)
 test_mfccs = test_mfccs.reshape(-1, test_mfccs.shape[1], test_mfccs.shape[2], 1)
 
 test_loss, test_acc = model.evaluate(test_mfccs, test_labels)
-print(f"테스트 정확도: {test_acc: 3f}")   # 0602 음성 길이 통일에 padding 적용 결과 정확도 0.9335
+print(f"테스트 정확도: {test_acc: 3f}")   # 0603 음성 길이 통일에 padding + Conv4 적용 결과 정확도 0.9265(구글 코랩 0.932)
