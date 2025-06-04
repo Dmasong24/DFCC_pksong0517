@@ -33,14 +33,14 @@ test_labels = le.transform(test_label['label'])
 def train_dataset():
     folder = "train"
     dataset = []
-    for file in os.listdir(folder):
+    for file in sorted(os.listdir(folder)):
         if 'wav' in file:
             abs_file_path = os.path.join(folder,file)
             data, sr = librosa.load(abs_file_path, sr = 16000)   # data = 진폭값, sr = sample_rate = 16,000(초당 샘플 갯수)
-            dataset.append([data])
+            dataset.append([data, file])
 
     print("Train_Dataset 생성 완료")
-    return pd.DataFrame(dataset,columns=['data'])
+    return pd.DataFrame(dataset,columns=['data', 'file'])
 
 def test_dataset():
     folder = "test"
@@ -57,8 +57,30 @@ def test_dataset():
 train_wav = train_dataset()
 test_wav = test_dataset()
 
+# audio 파일 증강하기(Augmentation)
+def add_noise(train):   # 원본 음성에 noise를 추가해주는 함수
+    Augmentation_dataset = []
+    for i in range(len(train)):
+        data = train.data[i]
+        label = train.file[i]
+
+        noise_level=0.005
+        noise = np.random.randn(len(data))  # 정규 분포를 따르는 노이즈 생성
+        augmented_data = data + noise_level * noise  # 데이터에 노이즈 추가
+        augmented_data = np.clip(augmented_data, -1, 1)  # 값이 -1과 1 사이로 유지되도록 함
+
+        augmetation_label = label.replace('.wav', '_noise.wav')  # label 이름 수정
+        Augmentation_dataset.append([augmented_data, augmetation_label])
+
+    print("noise_dataset 생성 완료")
+    return pd.DataFrame(Augmentation_dataset,columns=['data', 'file'])
+
+noise_wav = add_noise(train_wav)
+augmented_wav = pd.concat([train_wav, noise_wav], axis=0)
+augmented_labels = np.tile(train_labels, 2) # label도 그대로 2배 증폭
+
 # wav 파일 음성 가장 긴 길이를 기준으로 padding 하기
-train_x = np.array(train_wav.data)
+train_x = np.array(augmented_wav.data)
 test_x = np.array(test_wav.data)
 
 # 가장 긴 길이 계산
@@ -76,6 +98,7 @@ def set_length_with_padding(data, max_length):
 
 train_x = set_length_with_padding(train_x, max_length)
 test_x = set_length_with_padding(test_x, max_length)
+print("padding 완료")
 
 # MFCC 특징 추출하기
 def preprocess_dataset(data):
@@ -91,9 +114,9 @@ train_mfccs = np.array(train_mfccs)
 train_mfccs = train_mfccs.reshape(-1, train_mfccs.shape[1], train_mfccs.shape[2], 1)
 
 # train_data와 val_data 나누기
-X_train, X_val, y_train, y_val = train_test_split(train_mfccs, train_labels,
-                                                  test_size = 1000,   # val_data로 1000개 나눌 것임
-                                                  stratify = train_labels,   # Train 데이터와 Test 데이터에 Real과 Fake가 골고루 섞이도록 나눔
+X_train, X_val, y_train, y_val = train_test_split(train_mfccs, augmented_labels,
+                                                  test_size = 0.2,   # val_data 0.2로 8:2로 나눌 것임
+                                                  stratify = augmented_labels,   # Train 데이터와 Test 데이터에 Real과 Fake가 골고루 섞이도록 나눔
                                                   random_state = 42)   # 분할하는 데이터를 섞을 때 기준이 되는 값으로, 이 값을 고정시켜줘야 데이터셋이 변경되지 않아 정확한 비교 가능
 
 # CNN 학습
@@ -101,29 +124,24 @@ def Build_DFCC_CNN(input_shape=train_mfccs[0].shape):
     model = Sequential()
 
     # Conv 1
-    model.add(Conv2D(16, kernel_size=(3,3), activation='relu', padding='same', input_shape=input_shape))
+    model.add(Conv2D(16, kernel_size=(2,2), activation='relu', padding='same', input_shape=input_shape))
     model.add(BatchNormalization())
     model.add(MaxPooling2D(pool_size=(2,2)))
 
     # Conv 2
-    model.add(Conv2D(32, kernel_size=(3,3), activation='relu', padding='same'))
+    model.add(Conv2D(32, kernel_size=(2,2), activation='relu', padding='same'))
     model.add(BatchNormalization())
     model.add(MaxPooling2D(pool_size=(2,2)))
 
-    # Conv 3
-    model.add(Conv2D(64, kernel_size=(3,3), activation='relu', padding='same'))
-    model.add(BatchNormalization())
-    model.add(MaxPooling2D(pool_size=(2,2)))
-
-    # Con4
-    model.add(Conv2D(128, kernel_size=(3,3), activation='relu', padding='same'))
+     # Conv 3
+    model.add(Conv2D(64, kernel_size=(2,2), activation='relu', padding='same'))
     model.add(BatchNormalization())
     model.add(MaxPooling2D(pool_size=(2,2)))
 
     # Flatten + DNN
     model.add(Flatten())
     model.add(Dense(128, activation='relu'))
-    model.add(Dropout(0.2))
+    model.add(Dropout(0.5))
     model.add(Dense(1, activation='sigmoid'))
 
     return model
