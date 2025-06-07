@@ -29,7 +29,7 @@ def test_dataset():
     for file in os.listdir(folder):
         if 'wav' in file:
             abs_file_path = os.path.join(folder,file)
-            data, sr = librosa.load(abs_file_path, sr = 16000)   # data = 진폭값, sr = sample_rate = 16,000(초당 샘플 갯수)
+            data, sr = librosa.load(abs_file_path, sr = 16000)
             dataset.append([data, file])
 
     print("test_Dataset 생성 완료")

@@ -19,6 +19,10 @@ train_labels = le.fit_transform(train_label['label'])   # Real, Fake를 각각 1
 
 # test_label 오름차순 정렬을 위한 숫자 부분 추출 함수 
 def extract_number_from_test_label(test_label):
+    """
+    파일 이름에서 숫자 부분을 추출
+    예: 'YSG KDF_E_1004.wav' -> '1004'
+    """
     match = re.search(r'\d+', test_label)
     if match:
         return match.group(0)
@@ -125,7 +129,7 @@ def Build_DFCC_CNN(input_shape=train_mfccs[0].shape):    # 앞에서 data shape 
     model.add(MaxPooling2D(pool_size=(2,2)))
 
      # Conv 3
-    model.add(Conv2D(64, kernel_size=(2,2), activation='relu', padding='same'))
+    model.add(Conv2D(32, kernel_size=(2,2), activation='relu', padding='same'))
     model.add(BatchNormalization())
     model.add(MaxPooling2D(pool_size=(2,2)))
 
@@ -133,7 +137,7 @@ def Build_DFCC_CNN(input_shape=train_mfccs[0].shape):    # 앞에서 data shape 
     model.add(Flatten())
     model.add(Dense(128, activation='relu'))
     model.add(Dropout(0.5))
-    model.add(Dense(1, activation='sigmoid'))
+    model.add(Dense(1, activation='sigmoid'))   # 이진 분류 모델이므로 마지막은 sigmoid 사용
 
     return model
 
