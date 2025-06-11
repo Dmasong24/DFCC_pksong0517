@@ -63,11 +63,42 @@ test_mfccs = preprocess_dataset(test_x)
 test_mfccs = np.array(test_mfccs)
 test_mfccs = test_mfccs.reshape(-1, test_mfccs.shape[1], test_mfccs.shape[2], 1)
 
+'''
 # test_accuracy 측정
-test_loss, test_acc = model.evaluate(test_mfccs, test_labels)
-print(f"테스트 정확도: {test_acc: 3f}")
+#test_loss, test_acc = model.evaluate(test_mfccs, test_labels)
+#print(f"테스트 정확도: {test_acc: 3f}")
 
 # 결과값 저장
 with open('pksong0517_test_result.txt', 'w') as f:
     f.write(f"Loss: {test_loss:.3f}\n")
     f.write(f"Accuracy: {test_acc:.3f}\n")
+'''
+
+pred = model.predict(test_mfccs)  # 예측 수행
+#np.savetxt('pred_pksong0517.txt', pred, fmt='%.3f')  # 텍스트 파일로 저장
+
+pred_flat = pred.flatten()
+'''
+from sklearn.metrics import precision_recall_curve      # Real, Fake 분기점을 정하기 위한 F1-score 구하기(0.5 말고 F1-score 사용할거임) 
+precision, recall, thresholds = precision_recall_curve(test_labels, pred_flat)
+f1_scores = 2 * (precision * recall) / (precision + recall + 1e-9)
+optimal_threshold = thresholds[np.argmax(f1_scores)]    # F1-score가 가장 높은 threshold 값을 optimal_threshold에 저장
+print(f"optimal_threshold 값 = {optimal_threshold}")
+'''
+optimal_threshold = 0.8700136
+pred_classes = (pred_flat > optimal_threshold).astype(int)  # optimal_threshold를 기준으로 1,0 나누기
+
+# Real, Fake로 나오는 pred.txt 생성 
+with open('pred_pksong0517_label.txt', 'w') as f:
+    for idx, value in enumerate(pred_flat):
+        file_name = test_wav['file'].iloc[idx]
+        label = 'Real' if pred_classes[idx] == 1 else 'Fake'
+        f.write(f"{file_name} {label}\n")
+
+# eval.pl 사용을 위해 test_label_sorted.txt 생성
+test_label_sorted = test_label.drop(columns=['voice_number'])   # voice_number 열 제외하고 저장
+with open('test_label_sorted.txt', 'w', encoding='utf-8') as f:
+    for idx, row in test_label_sorted.iterrows():
+        f.write(f"{row['voice_name']}- -{row['label']}\n")
+
+os.system("perl eval.pl pred_pksong0517_label.txt test_label_sorted.txt")
